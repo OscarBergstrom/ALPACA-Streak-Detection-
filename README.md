@@ -14,7 +14,7 @@ The pipeline works as follows:
 - A kd-tree is then used to compare SatChecker API FOV passes data [4].
 - Next, photometry is performed using rectangular apertures; current methods can include Curve-of-Growth and an analytic 1D Moffat fit.
 - Local Reference stars are used to perform relative photometry, with an equal Enclosed Energy (EE) ratio to that of the satellite streak.
-- Magnitudes are dwell time corrected according to the TLE data.  
+- Magnitudes are dwell-time corrected according to the TLE data.  
 
 
 This is still a work in progress, and now, with some extra time after submission, I will clean up the code to streamline and improve the pipeline. 
@@ -25,6 +25,7 @@ In order to run the entire pipeline, careful consideration of the versions used 
 
 
 References:
+
 [1] https://globalmeteornetwork.org/wiki/index.php?title=SkyFit2
 
 [2] Denis Vida, Damir Šegon, Peter S Gural, Peter G Brown, Mark J M McIntyre, Tammo Jan Dijkema, Lovro Pavletić, Patrik Kukić, Michael J Mazur, Peter Eschman, Paul Roggemans, Aleksandar Merlak, Dario Zubović, The Global Meteor Network – Methodology and first results, Monthly Notices of the Royal Astronomical Society, Volume 506, Issue 4, October 2021, Pages 5046–5074
