@@ -19,6 +19,10 @@ The pipeline works as follows:
 
 This is still a work in progress, and now, with some extra time after submission, I will clean up the code to streamline and improve the pipeline. 
 
+**Running the Pipeline**
+
+In order to run the entire pipeline, careful consideration of the versions used must be taken:
+
 
 References:
 [1] https://globalmeteornetwork.org/wiki/index.php?title=SkyFit2
