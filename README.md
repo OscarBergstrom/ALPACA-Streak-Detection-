@@ -26,6 +26,10 @@ In order to run the entire pipeline, careful consideration of the versions used 
 
 References:
 [1] https://globalmeteornetwork.org/wiki/index.php?title=SkyFit2
+
 [2] Denis Vida, Damir Šegon, Peter S Gural, Peter G Brown, Mark J M McIntyre, Tammo Jan Dijkema, Lovro Pavletić, Patrik Kukić, Michael J Mazur, Peter Eschman, Paul Roggemans, Aleksandar Merlak, Dario Zubović, The Global Meteor Network – Methodology and first results, Monthly Notices of the Royal Astronomical Society, Volume 506, Issue 4, October 2021, Pages 5046–5074
+
 [3] https://github.com/uwescience/satmetrics SatMetrics, University of Washington.
+
 [4] https://satchecker.readthedocs.io/en/stable/fov.html
+
