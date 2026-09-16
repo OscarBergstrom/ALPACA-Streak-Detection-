@@ -22,19 +22,33 @@ This is still a work in progress, and now, with some extra time after submission
 **Running the Pipeline**
 
 In order to run the entire pipeline, careful consideration of the versions used must be taken:
+
 - There are significant clashes between SkyFit2 and other packages such as photutils and opencv, due to the version of NumPy used.
+  
 - Install SkyFit2 and its dependencies first.
+  
 - Given the NumPy version restriction due to SkyFit2 (< 2.0), one must ensure that the remaining packages are uninstalled under this restriction:
+  
 numpy:      1.26.4
+
 scipy:      1.13.1
+
 astropy:    6.0.1
+
 photutils:  1.11.0
+
 skimage:    0.24.0
+
 cv2:        4.11.0
+
 matplotlib: 3.9.4
+
 pandas:     2.3.3
+
 requests:   2.32.5
+
 astroquery: 0.4.11
+
 astroalign: 2.5.2
 
 
