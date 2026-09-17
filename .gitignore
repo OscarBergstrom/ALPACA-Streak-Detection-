@@ -1,0 +1,6 @@
+*.fits
+*.fit
+*.png
+.ipynb_checkpoints/
+__pycache__/
+reference_output.txt
