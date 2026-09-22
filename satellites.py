@@ -21,7 +21,9 @@ class SatelliteMixin:
         url = 'https://satchecker.cps.iau.org/fov/satellite-passes/'
         duration = 120
     
-        params = {'site': 'paranal',
+        params = {'latitude': self.lat,
+                  'longitude': self.lon,
+                  'elevation': self.alt,
                   'start_time_jd': self.exposure_start_jd,
                   'duration': duration,
                   'ra': ra,
@@ -63,7 +65,7 @@ class SatelliteMixin:
     
             for position in sat_data['positions']:
     
-                x, y = raDecToXYPP(np.atleast_1d(position['ra']), np.atleast_1d(position['dec']),
+                x, y = self.sky_to_pixel(np.atleast_1d(position['ra']), np.atleast_1d(position['dec']),
                                     position['julian_date'], self.pp)
                 satellites[sat_key].append([
                     x,
@@ -102,11 +104,9 @@ class SatelliteMixin:
         return score, mean_dist, spread
 
     def computing_ratio_of_lengths(self, start_point, end_point, satellite_nid):
-        level_data = np.ones(1)
-        time_data = [jd2Date(self.exposure_start_jd)] 
-        
-        _, ra0, dec0, _ = xyToRaDecPP(time_data, [start_point[0]], [start_point[1]], level_data, self.pp)
-        _, ra1, dec1, _ = xyToRaDecPP(time_data, [end_point[0]], [end_point[1]], level_data, self.pp)
+
+        ra0, dec0 = self.pixel_to_sky([start_point[0]], [start_point[1]])
+        ra1, dec1 = self.pixel_to_sky([end_point[0]], [end_point[1]])
 
         S0 = SkyCoord(ra = ra0 * u.deg, dec = dec0 * u.deg)
         S1 = SkyCoord(ra = ra1 * u.deg, dec = dec1 * u.deg)
@@ -133,14 +133,10 @@ class SatelliteMixin:
 
     def segment_temporal_lengths(self, centres, ratio):
         streak_duration = 120 * np.absolute(ratio)
-        
-        level_data = np.ones(len(centres))
-        time_data = [jd2Date(self.exposure_start_jd)] * len(centres)
-
         # as done before 
         xs = [c[0] for c in centres]
         ys = [c[1] for c in centres]
-        _, ra, dec, _ = xyToRaDecPP(time_data, xs, ys, level_data, self.pp)
+        ra, dec = self.pixel_to_sky(xs, ys)
         altaz_frame = AltAz(obstime=self.exposure_start, location=self.location)     
                 
         coords = SkyCoord(ra=ra * u.deg, dec=dec * u.deg)
@@ -163,11 +159,9 @@ class SatelliteMixin:
     def computing_ratio_of_lengths_simulated(self, start_point, end_point,
                                        ra_truth_start, dec_truth_start,
                                        ra_truth_end, dec_truth_end):
-        level_data = np.ones(1)
-        time_data = [jd2Date(self.exposure_start_jd)]
-    
-        _, ra0, dec0, _ = xyToRaDecPP(time_data, [start_point[0]], [start_point[1]], level_data, self.pp)
-        _, ra1, dec1, _ = xyToRaDecPP(time_data, [end_point[0]], [end_point[1]], level_data, self.pp)
+        
+        ra0, dec0 = self.pixel_to_sky([start_point[0]], [start_point[1]])
+        ra1, dec1 = self.pixel_to_sky([end_point[0]], [end_point[1]])
     
         S0 = SkyCoord(ra=ra0 * u.deg, dec=dec0 * u.deg)
         S1 = SkyCoord(ra=ra1 * u.deg, dec=dec1 * u.deg)

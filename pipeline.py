@@ -13,7 +13,7 @@ from scipy.interpolate import splev, splprep
 class PipelineMixin:
     def run_hough_transform(self):
         UNDISTORTED_FITS = f"{self.file_name}_undistorted.fits"
-        CROPPED_FITS = f"{self.file_name}_cropped67deg.fits"
+        CROPPED_FITS = f"{self.file_name}_cropped{self.cutoff_deg}deg.fits"
         
         results, intermediates = self.detect_and_convert(
             undistorted_fits_path=UNDISTORTED_FITS,
@@ -29,7 +29,6 @@ class PipelineMixin:
         with fits.open(CROPPED_FITS, memmap=False) as hdul:
             cropped_original_data = hdul[0].data.copy()
 
-       
         if self.simulated:
             self.analyse_simulated_streak(
             results,
@@ -52,21 +51,13 @@ class PipelineMixin:
                 )
                 
                 x_seg, y_seg = refined['x_refined'], refined['y_refined']
-
-                points = np.column_stack([x_seg, y_seg])
-    
-                inliers, model = self.ransac_streak_spline_fitting(points = points, order=2)
-
-
+                #inliers, model = self.ransac_streak_spline_fitting(points = points, order=2)
                 cx, cy = self.get_centerline(x_seg, y_seg, n_bins=40)
                 tck, u = splprep([cx, cy], s=len(cx) * 10, k=2)
                 
                 u_check = np.linspace(0, 1, 500)
-                
                 spline_xs, spline_ys = splev(u_check, tck)
 
-                
-                
                 x_mid, y_mid = splev(0.5, tck)
                 
                 _, ra_c, dec_c, _ = xyToRaDecPP(
@@ -141,8 +132,8 @@ class PipelineMixin:
                 
                 ax3.plot(refined["x_refined"], refined["y_refined"], color="lime", label="Refined", linewidth=1.5)
 
-                x_range = np.linspace(points[:, 0].min(), points[:, 0].max(), 400)
-                y_fit = model.predict(x_range)   
+                # x_range = np.linspace(points[:, 0].min(), points[:, 0].max(), 400)
+                # y_fit = model.predict(x_range)   
 
                 
                 ax3.plot(spline_xs, spline_ys, color = "blue", linewidth = 1)

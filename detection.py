@@ -7,39 +7,10 @@ from photutils.background import Background2D, MedianBackground
 from scipy.ndimage import map_coordinates
 from scipy.optimize import curve_fit
 from skimage.measure import ransac
+from scipy.ndimage import median_filter
 
 # Method bodies are copied unchanged from the original single class.
 # They still use self, so they only work as part of OperatingFitsFiles (frame.py).
-
-
-class PolyModel:
-    """
-    Defined as a seperate class for my curve fitting procedure.
-    """
-    def __init__(self, order=2):
-        self.order = order
-        self.coeffs = None
-
-    def estimate(self, data):
-        x, y = data[:, 0], data[:, 1]
-        self.coeffs = np.polyfit(x, y, self.order)
-        return True
-
-    def residuals(self, data):
-        x, y = data[:, 0], data[:, 1]
-        y_pred = np.polyval(self.coeffs, x)
-        return np.abs(y - y_pred)
-
-    def predict(self, x):
-        return np.polyval(self.coeffs, x)
-
-
-def make_poly_model(order):
-    class _BoundPolyModel(PolyModel):
-        def __init__(self):
-            super().__init__(order=order)
-    return _BoundPolyModel
-
 
 class DetectionMixin:
     def get_centerline(self, x, y, n_bins = 100):
@@ -207,12 +178,11 @@ class DetectionMixin:
     
             x_crop_dist, y_crop_dist = self.undistorted_xy_to_original_xy(
                 x_seg, y_seg, out_width, out_height, half_tan,
-                ra_centre_deg, dec_centre_deg, self.pp, obs_time_tuple,
+                ra_centre_deg, dec_centre_deg, obs_time_tuple,
                 crop_x0=crop_x0, crop_y0=crop_y0,
             )
             x_original_dist = x_crop_dist + crop_x0
             y_original_dist = y_crop_dist + crop_y0
-            discrim_radius = 3000
             length_px = np.hypot(x2 - x1, y2 - y1)
 
             distance = np.sqrt((x2 - 3246)**2+(y2 - 3246)**2) # HARDCODED PLEASE CHANGE TO IMPROVE FUNCTIONALITY OSCAR!!!!
@@ -359,7 +329,6 @@ class DetectionMixin:
             width[i] = sigma_fit
             perp_offset_raw[i] = mu_fit
 
-        mask = self.hampel_with_persistence(perp_offset_raw, window=50, n_sigmas=3, min_run=20)
         # --- 3. Outlier rejection: reject points whose perpendicular offset ---
         #     deviates too far from the smooth local trend (catches stars/glitches)
         flagged = np.isnan(x_refined)  # already-failed (low SNR) points
@@ -367,7 +336,7 @@ class DetectionMixin:
         valid = ~np.isnan(perp_offset_raw)
         if valid.sum() >= 5:
             # smooth trend via median filter over a small window
-            from scipy.ndimage import median_filter
+            
             trend = np.full(n_steps, np.nan)
             trend[valid] = median_filter(perp_offset_raw[valid], size=min(9, valid.sum()), mode='nearest')
             resid = np.abs(perp_offset_raw - trend)
@@ -429,17 +398,3 @@ class DetectionMixin:
         theta = np.arctan2(dy_s, dx_s)
         
         return lengths, centres, theta
-
-    def ransac_streak_spline_fitting(self, points, order=2, residual_threshold=2.0,
-                                  min_samples=None, max_trials=1000):
-        if min_samples is None:
-            min_samples = order + 2  # need enough points to constrain the poly
-            
-        model_class = make_poly_model(order)
-        model, inliers = ransac(
-            points, model_class,
-            min_samples=min_samples,
-            residual_threshold=residual_threshold,
-            max_trials=max_trials
-        )
-        return inliers, model

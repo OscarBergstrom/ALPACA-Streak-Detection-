@@ -257,6 +257,10 @@ class PhotometryMixin:
             area_list.append(area_in)
             flux_error_list.append(flux_error_vignet_corrected)
 
+        if len(flux_net_list) < 3:
+            print(f"Skipping streak: only {len(flux_net_list)} of {len(lengths)} sections "
+                  f"passed the profile-fit cuts.")
+            return np.nan, np.nan, [], np.nan
         
         # Generate masks to eliminate unwanted readings, these could be due to a number of issues:
         # Background stars shifting the centre line
@@ -294,7 +298,6 @@ class PhotometryMixin:
         
         snr_arr = flux_arr / flux_err_arr
         
-        x_axis = np.arange(len(mu_arr))
         return mag_arcsec, mag_total, flux_net_list, mag_total_120_s_normalised
 
     def hampel_with_persistence(self, y, window, n_sigmas, min_run):
@@ -474,7 +477,7 @@ class PhotometryMixin:
             print(alpha_fit)
             if not fit_ok or abs(mu_fit) > 8 or sigma_fit < 0.5 or sigma_fit > 12 or A_fit <= 0:
                 continue
-    
+            
             mu_fits.append(mu_fit); A_fits.append(A_fit); sigma_fits.append(sigma_fit)
             centres_fit.append(c_fit); mu_err_list.append(mu_err)
     
@@ -512,7 +515,11 @@ class PhotometryMixin:
     
             flux_net_list.append(flux_net_vignet_correct)
             flux_error_list.append(flux_error_vignet_corrected)
-    
+
+        if len(flux_net_list) < 3:
+            print(f"Skipping streak: only {len(flux_net_list)} of {len(lengths)} sections passed the profile-fit cuts.")
+            return np.nan, np.nan, [], np.nan
+        
         flux_arr = np.asarray(flux_net_list)
         flux_err_arr = np.asarray(flux_error_list)
         centres_arr = np.asarray(centres_fit)

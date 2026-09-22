@@ -40,7 +40,7 @@ class CalibrationMixin:
 
     def photometry_analysis(self, x, y, source_radius=None,
                         annulus_inner=None, annulus_outer=None):
-        print(source_radius)
+        # print(source_radius)
         if source_radius is None:
             source_radius = 1.5 * self.median_fwhm
         if annulus_inner is None:
@@ -129,7 +129,7 @@ class CalibrationMixin:
         planck = (2 * h * c**2) / (lam_m**5 * (np.exp((h * c) / (lam_m * k_B * T_eff)) - 1))
         weight = S_interp * planck
 
-        print(f"vmag={vmag:.2f} bmag={bmag:.2f} B-V={bv:.3f} T_eff={T_eff:.1f}")
+        # print(f"vmag={vmag:.2f} bmag={bmag:.2f} B-V={bv:.3f} T_eff={T_eff:.1f}")
         numerator   = simpson(k_interp * weight, x=lam_common)
         denominator = simpson(weight, x=lam_common)
         extinction_coeff = numerator / denominator
@@ -314,12 +314,10 @@ class CalibrationMixin:
             pa_radial = np.arctan2(yc - 4375, xc - 4375)
     
             ab = self.fit_moffat(xc, yc)
-            if ab is None:
-                print(f"{star_id}  Moffat fit failed  r={r_field:.0f}")
-                continue
+            
             alpha, beta = ab
             fits.append((alpha, beta, r_field))
-            print(f"{star_id}  alpha={alpha:.2f}  beta={beta:.2f}")
+            #print(f"{star_id}  alpha={alpha:.2f}  beta={beta:.2f}")
     
         if len(fits) < 3:
             raise ValueError(f"Only {len(fits)} usable Moffat fits for this streak.")
@@ -334,9 +332,9 @@ class CalibrationMixin:
         a_med = np.median(self.moffat_fits[:, 0])
         r_in  = 5.0 * a_med                                  # tied to alpha, not to r_star
         r_out = 8.0 * a_med
-        print(f"r_star={r_star:.2f} +/- {self.r_star_err:.2f} px  "
-              f"streak halfwidth={self.streak_halfwidth:.2f} px  "
-              f"annulus {r_in:.1f}-{r_out:.1f} px")
+        # print(f"r_star={r_star:.2f} +/- {self.r_star_err:.2f} px  "
+        #       f"streak halfwidth={self.streak_halfwidth:.2f} px  "
+        #       f"annulus {r_in:.1f}-{r_out:.1f} px")
     
         # --- pass 2: photometry + zeropoints ---
         zero_points = []
@@ -346,7 +344,7 @@ class CalibrationMixin:
             flux = self.photometry_analysis(xc, yc, r_star, r_in, r_out)
             vignetted_flux, lb, ub = self.vignetting_response(flux, xc, yc)
             if not np.isfinite(vignetted_flux) or vignetted_flux <= 0:
-                print(f"skipping {star_id}: flux={vignetted_flux}")
+                # print(f"skipping {star_id}: flux={vignetted_flux}")
                 continue
             star_centres.append((xc, yc))
             scan_stars.append((xc, yc, vmag, mag_correction))

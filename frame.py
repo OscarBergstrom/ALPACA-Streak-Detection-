@@ -1,5 +1,6 @@
 """Loading the FITS frame, cropping and undistorting. Also assembles the full class."""
 from datetime import datetime, timedelta, timezone
+from . import config
 
 import cv2
 import numpy as np
@@ -8,9 +9,13 @@ from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.io import fits
 from astropy.time import Time
 from photutils.centroids import centroid_2dg, centroid_sources
-from RMS.Astrometry.ApplyAstrometry import raDecToXYPP
+from RMS.Astrometry.ApplyAstrometry import raDecToXYPP, xyToRaDecPP
 from RMS.Astrometry.Conversions import date2JD
 from RMS.Formats.Platepar import Platepar
+import logging
+logging.basicConfig(level=logging.INFO)
+for name in ("matplotlib", "matplotlib.font_manager", "PIL", "astropy", "astroquery", "photutils", "scipy", "skimage", "cv2"):
+    logging.getLogger(name).setLevel(logging.WARNING)
 
 from .calibration import CalibrationMixin
 from .detection import DetectionMixin
@@ -37,62 +42,30 @@ class OperatingFitsFiles(DetectionMixin, CalibrationMixin, PhotometryMixin,
         with fits.open(self.file_name, memmap=False) as hdul:
             header = hdul[0].header
             self.header = header
-            print(header)
+            self.fits_data = np.flipud(hdul[0].data)
+            # print(header)
             exposure_start = Time(header['DATE-OBS'], scale = 'utc') 
             
             self.exposure_start_jd = exposure_start.jd 
-            
-            print(self.exposure_start_jd)
-
             self.exposure_start = Time(header["DATE-OBS"], format="isot", scale="utc")
-            
             self.exposure_start_dt = datetime.fromisoformat(f"{exposure_start}").replace(tzinfo=timezone.utc)
-    
             self.exposure_time = header.get('EXPTIME', 0)
-            
             self.exposure_end_dt = self.exposure_start_dt + timedelta(seconds = self.exposure_time)
-            
             self.right_ascension = header.get('RA', 0)
             self.declination = header.get('DEC', 0)
-            
             self.ra = header['RA'] # Not sure why I did this twice, but will clear up post project!
             self.dec = header['DEC']
-            print(self.ra, self.dec)
-            self.lon = header['HIERARCH ESO TEL GEOLON']
-            self.lat = header['HIERARCH ESO TEL GEOLAT']
-            self.alt = header['HIERARCH ESO TEL GEOELEV']
+            print("OK", self.ra, self.dec)
+            self.lon = header[f'{config.LONGITUDE_HEADER}']
+            self.lat = header[f'{config.LATITUDE_HEADER}']
+            self.alt = header[f'{config.ALTITUDE_HEADER}']
             self.location = EarthLocation(lat=self.lat*u.deg, lon=self.lon*u.deg, height=self.alt*u.m)
+
             if self.simulated:
                 self.ra_truth_start = header['TRUERA0']
                 self.dec_truth_start = header['TRUEDEC0']
                 self.ra_truth_end = header['TRUERA1']
                 self.dec_truth_end = header['TRUEDEC1']
-
-        self.fits_data = np.flipud(fits.getdata(self.file_name))
-        
-        box_size = 6400
-        ny, nx = self.fits_data.shape
-        half = box_size // 2
-        cy, cx = ny // 2, nx // 2  # center pixel
-        # Compute crop boundaries
-        y0, y1 = cy - half, cy + half
-        x0, x1 = cx - half, cx + half
-        
-        cropped = self.fits_data[y0:y1, x0:x1]
-        cropped = np.clip(cropped, a_min=None, a_max=1500)
-        
-        # radial mask relative to the cropped array's own center
-        hh, ww = cropped.shape
-        yy, xx = np.mgrid[0:hh, 0:ww]
-        ccy, ccx = hh // 2, ww // 2
-        radius = half  # inscribed circle
-        dist = np.sqrt((yy - ccy) ** 2 + (xx - ccx) ** 2)
-        mask = dist <= radius
-        
-        fill_value = np.median(cropped[mask])  # avoid a hard 0-edge that Canny would pick up
-        cropped[~mask] = fill_value
-        
-        self.fits_data_cropped = cropped
         
         star_names = "Spica" 
 
@@ -103,20 +76,29 @@ class OperatingFitsFiles(DetectionMixin, CalibrationMixin, PhotometryMixin,
         star_x, star_y = raDecToXYPP(np.atleast_1d(star_location.ra.deg), np.atleast_1d(star_location.dec.deg), self.exposure_start_jd, pp)
         
         centroid_func = centroid_2dg
-        print(star_x, star_y)
+        # print(star_x, star_y)
         x_ref, y_ref = centroid_sources(
                 self.fits_data, star_x, star_y, box_size=39, centroid_func=centroid_func
             )
 
-        if np.sqrt((star_x - x_ref)**2 +(star_y - y_ref)**2) < 10:
-            self.pp = Platepar()
-            self.pp.read(r"C:\Users\carlo\Summer Project\newlenscalib.cal")
+        if np.hypot(star_x - x_ref, star_y - y_ref)[0] < config.CHECK_STAR_TOLERANCE_PX:
+            self.pp = pp
         else:
             self.pp = Platepar()
-            self.pp.read(r"C:\Users\carlo\Summer Project\lenscalibMAIN.cal")
-        print(self.pp)
+            self.pp.read(str(config.PLATEPAR_FALLBACK))
+        print(config.PLATEPAR_PRIMARY, config.PLATEPAR_PRIMARY.exists())
+    def sky_to_pixel(self, ra_deg, dec_deg):
+        return raDecToXYPP(np.atleast_1d(ra_deg), np.atleast_1d(dec_deg), self.exposure_start_jd, self.pp)
 
-    def inverse_gnomonic(self, xi, eta, ra_centre_deg, dec_centre_deg):
+    def pixel_to_sky(self, x, y):
+        n = len(np.atleast_1d(x))
+        _, ra, dec, _ = xyToRaDecPP([self.exposure_start_jd] * n,
+                                    np.atleast_1d(x), np.atleast_1d(y), np.ones(n), self.pp, jd_time = True)
+        return ra, dec
+        # print(self.pp)
+    
+    @staticmethod
+    def inverse_gnomonic(xi, eta, ra_centre_deg, dec_centre_deg):
         """
         Inverse gnomonic projection. Valid for xi, eta < pi/2 radians!
         """
@@ -148,8 +130,9 @@ class OperatingFitsFiles(DetectionMixin, CalibrationMixin, PhotometryMixin,
     def get_obs_time_tuple(self):
         dt = self.exposure_start.datetime
         return (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.microsecond // 1000)
-
-    def great_circle_destination(self, ra0_deg, dec0_deg, bearing_deg, ang_dist_deg):
+    
+    @staticmethod
+    def great_circle_destination(ra0_deg, dec0_deg, bearing_deg, ang_dist_deg):
         ra0 = np.radians(ra0_deg)
         dec0 = np.radians(dec0_deg)
         brng = np.radians(bearing_deg)
@@ -162,14 +145,14 @@ class OperatingFitsFiles(DetectionMixin, CalibrationMixin, PhotometryMixin,
         )
         return np.degrees(ra) % 360.0, np.degrees(dec)
 
-    def cutoff_boundary_pixels(self, pp, ra_centre_deg, dec_centre_deg, obs_time_tuple, cutoff_deg, n_points=720):
+    def cutoff_boundary_pixels(self, ra_centre_deg, dec_centre_deg, cutoff_deg, n_points=720):
         bearings = np.linspace(0, 360, n_points, endpoint=False)
         ra_line, dec_line = self.great_circle_destination(ra_centre_deg, dec_centre_deg, bearings, cutoff_deg)
-        jd = date2JD(*obs_time_tuple)
-        x_pix, y_pix = raDecToXYPP(ra_line, dec_line, jd, pp)
+
+        x_pix, y_pix = self.sky_to_pixel(ra_line, dec_line)
         return x_pix, y_pix
 
-    def crop_fits_by_angle(self, fits_out_path, cutoff_deg=75.0,
+    def crop_fits_by_angle(self, fits_out_path, cutoff_deg=config.CUTOFF_DEG,
                             preview_png="crop_preview.png"):
         """
         Crops the raw fits exposure to eliminate buildings and ensure that gnomonic map doesnt explode at 90degrees.
@@ -177,14 +160,8 @@ class OperatingFitsFiles(DetectionMixin, CalibrationMixin, PhotometryMixin,
         
         height, width = self.fits_data.shape[-2], self.fits_data.shape[-1]
         ra_centre_deg, dec_centre_deg = self.ra, self.dec
-        obs_time_tuple = self.get_obs_time_tuple()
     
-        x_bound, y_bound = self.cutoff_boundary_pixels(
-            self.pp, ra_centre_deg, dec_centre_deg, obs_time_tuple, cutoff_deg
-        )
-    
-        # --- preview before committing to the crop ---
-        vmin, vmax = np.nanpercentile(self.fits_data, [1, 99.5])
+        x_bound, y_bound = self.cutoff_boundary_pixels(ra_centre_deg, dec_centre_deg, cutoff_deg)
         
         # --- build mask from the boundary polygon ---
         mask = np.zeros((height, width), dtype=np.uint8)
@@ -223,12 +200,12 @@ class OperatingFitsFiles(DetectionMixin, CalibrationMixin, PhotometryMixin,
 
     def run_crop_procedure(self):
         self.crop_fits_by_angle(
-            fits_out_path=f"{self.file_name}_cropped67deg.fits",
-            cutoff_deg=67.0,  # pick anywhere in your 65-70 deg range
+            fits_out_path=f"{self.file_name}_cropped{config.CUTOFF_DEG}deg.fits",
+            cutoff_deg=config.CUTOFF_DEG,  # pick anywhere in your 65-70 deg range
         )
 
     def undistorted_xy_to_original_xy(self, px, py, out_width, out_height, half_tan,
-                                       ra_centre_deg, dec_centre_deg, pp, obs_time_tuple,
+                                       ra_centre_deg, dec_centre_deg, obs_time_tuple,
                                        crop_x0=0, crop_y0=0):
         """
     
@@ -240,9 +217,8 @@ class OperatingFitsFiles(DetectionMixin, CalibrationMixin, PhotometryMixin,
         eta = (py / (out_height - 1) - 0.5) * 2 * half_tan
     
         ra_deg, dec_deg = self.inverse_gnomonic(xi, eta, ra_centre_deg, dec_centre_deg)
-    
-        jd = date2JD(*obs_time_tuple)
-        x_orig, y_orig = raDecToXYPP(ra_deg, dec_deg, jd, pp)
+        
+        x_orig, y_orig = self.sky_to_pixel(ra_deg, dec_deg)
     
         # x_orig, y_orig are in the ORIGINAL (uncropped) frame's coordinates.
         # Convert to the CROPPED frame's coordinates (what we actually remap from).
@@ -253,8 +229,7 @@ class OperatingFitsFiles(DetectionMixin, CalibrationMixin, PhotometryMixin,
         yy, xx = np.mgrid[0:out_height, 0:out_width]
         x_crop, y_crop = self.undistorted_xy_to_original_xy(
             xx.ravel(), yy.ravel(), out_width, out_height, half_tan,
-            ra_centre_deg, dec_centre_deg, pp, obs_time_tuple, crop_x0, crop_y0,
-        )
+            ra_centre_deg, dec_centre_deg, obs_time_tuple, crop_x0, crop_y0)
         map_x = x_crop.reshape(out_height, out_width).astype(np.float32)
         map_y = y_crop.reshape(out_height, out_width).astype(np.float32)
         return map_x, map_y
@@ -299,6 +274,6 @@ class OperatingFitsFiles(DetectionMixin, CalibrationMixin, PhotometryMixin,
 
     def undistort_fits(self):
         self.undistort_cropped_fits(
-            cropped_fits_path=f"{self.file_name}_cropped67deg.fits",
+            cropped_fits_path=f"{self.file_name}_cropped{self.cutoff_deg}deg.fits",
             fits_out_path=f"{self.file_name}_undistorted.fits",
         )
